@@ -361,7 +361,7 @@ $(function(){
         </p>
         <ul>
             <li>If you remove hash change functionality, everything works as expected. However, I tested with a different tabs implementation that had similar functionality (including hash change logic), and it worked as expected. The only difference was how JS and CSS were implemented.</li>
-            <li>After much debugging, it appears that removing the css rule <code>#tabs li.selected a { padding-bottom: 12px }</code> fixes the issue. Please inspect element to see details.</li>
+            <li>After much debugging, it appears that removing the css rule <code>#tabs li.selected a { padding-bottom: 17px }</code> fixes the issue. Please inspect element to see details.</li>
             <li>I made a <a href="https://youtu.be/Kn-7VrC_wxQ">video demonstrating the issue</a>.</li>
             <li>In the video, you can see that after activing a tab, the <code>main</code> element receives VO focus (black outline) and then an adjacent tab recieves both VO and normal focus (black outline).</li>
             <li>When you check 'Fix CSS', the <code>padding-bottom</code> style will be changed to match the other tabs.</li>
