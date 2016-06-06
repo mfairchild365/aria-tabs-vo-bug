@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tabs with ARIA</title>
+    <style>        
+       #tabs {
+           margin: 0;
+           padding: 0;
+           list-style: none;
+           font-size: 0;
+           font-size: 0
+       }
+       #tabs:after {
+           content: "";
+           display: table;
+           clear: both
+       }
+       @media (min-width: 768px) {
+           #tabs {
+               font-size: 0;
+               font-size: 0
+           }
+       }
+       #tabs li {
+           display: inline-block;
+           background-color: #f4f3f0;
+           border-radius: 2px;
+           margin: 0 .4em 5px 0;
+           font-size: 13px;
+           font-size: 1rem
+       }
+       @media (min-width: 768px) {
+           #tabs li {
+               font-size: 13px;
+               font-size: .8125rem
+           }
+       }
+       #tabs li.selected {
+           background-color: #eae9e6;
+           border-radius: 2px 2px 0 0;
+           margin-bottom: 0
+       }
+       #tabs li.selected a {
+           padding-bottom: 17px
+       }
+       .fix-problem #tabs li.selected a {
+           padding-bottom: 12px
+       }
+       #tabs li a {
+           padding: 12px 1rem;
+           display: block;
+           border: none
+       }
+       #tabs li ul {
+           margin: 0;
+           padding: 0;
+           list-style: none;
+           font-size: 0;
+           font-size: 0;
+           padding: 0 0 0 .4rem
+       }
+       #tabs li ul:after {
+           content: "";
+           display: table;
+           clear: both
+       }
+       @media (min-width: 768px) {
+           #tabs li ul {
+               font-size: 0;
+               font-size: 0
+           }
+       }
+       #tabs a {
+           color: #5b5b5a
+       }
+       .tabcontents {
+           background-color: #eae9e6;
+           padding: 1rem
+       }
+    </style>
+<script   src="https://code.jquery.com/jquery-2.2.4.min.js"   integrity="sha256-BbhdlvQf/xTY9gja0Dq3HiwQF8LaCRTXxZKRutelT44="   crossorigin="anonymous"></script>  
+
+<script type="text/javascript">
+$(function(){
+    var index = 0;
+    var $tabs = $('a.tab');
+    var useHashChange = true;
+    var tabSelector = '#tabs';
+    var $tabList = $(tabSelector);
+    var selected = 'selected';
+    var validRE = /^[a-z][\w:\-\.]*$/i;
+    var contentSelector = '.tabcontents';
+    var firstTrig;
+    
+    var jq = function(id) {
+        return '#' + id.replace(/(:|\.)/g, '\\$1');
+    };
+    
+    var getHashFromLink = function(link) {
+        var uri = link.href.split('#');
+
+        if (!uri[1]) {
+            return false;
+        }
+
+        return uri[1];
+    };
+
+    var getCleanHash = function() {
+        return window.location.hash.replace('#', '');
+    };
+
+    var setupA11y = function ($tabList) {
+        $tabList.attr('role', 'tablist');
+
+        //Use arrow keys to focus tabs (standard tab interaction)
+        $tabList.on('keydown', function(event){
+            console.log("wdn tabs key press", event);
+            var key = event.keyCode;
+            var $tab = $(event.target);
+            var $tabContainer = $($tab.parent());
+            var target = false;
+
+            //Check if arrows were pressed
+            if (key >= 37 && key <= 40) {
+                if (key == 37 || key == 38) {
+                    //Left or up arrow
+                    target = $tabContainer.prev('li');
+                } else {
+                    //right or down arrow
+                    target = $tabContainer.next('li');
+                }
+
+                $(target).find('a').click();
+                event.preventDefault();
+            }
+        });
+
+        var $tabs = $($tabList.find('a'));
+
+        $tabs.each(function() {
+            var $tab = $(this);
+
+            //Get the panel for this tab
+            var $panel = $('#'+getHashFromLink(this));
+
+            //If this tab doesn't have an id, give it one because we will need it later
+            if (!this.id) {
+                $tab.attr('id', 'wdn-tab-for-'+$panel.attr('id'));
+            }
+
+            //The parent <li> should not be read as a list item
+            $tab.parent('li').attr('role', 'presentation');
+
+            //Make sure that this <a> is read as a tab
+            $tab.attr('role', 'tab');
+
+            //Default to not selected
+            $tab.attr('aria-selected', 'false');
+
+            //Tell the tab that it controls this panel
+            $tab.attr('aria-controls', $panel.attr('id'));
+
+            //Only make tabs pragmatically focusable by default
+            $tab.attr('tabindex', '-1');
+
+            //Tell the panel that it is a panel
+            $panel.attr('role', 'tabpanel');
+
+            //Tell the panel that is is labeled by the tab
+            $panel.attr('aria-labelledby', $tab.attr('id'));
+        });
+    };
+
+    var updateInterface = function(trig) {
+        var tabs = trig.closest(tabSelector),
+                curr = trig.closest('li').siblings('.' + selected),
+                sibs = trig.siblings(),
+                parentTabs = trig.parents('li'),
+                nsel;
+
+        // Remove any selected tab class
+        $('li.' + selected, tabs).find('a').attr('tabindex', '-1').attr('aria-selected', 'false');
+        $('li.' + selected, tabs).removeClass(selected);
+
+        // Hide any subtabs
+        $('ul', tabs).hide();
+
+        // Add the selected class to the tab (and sub-tab)
+        parentTabs.addClass(selected);
+        parentTabs.find('a').attr('tabindex', '0').attr('aria-selected', 'true');
+
+        // Show any relevant sub-tabs
+        if (sibs.length || parentTabs.length > 1) {
+            if (!sibs.length) {
+                sibs = trig.closest('ul');
+            }
+            sibs.show();
+        }
+
+        nsel = trig.closest('li').siblings('.' + selected);
+        trig.trigger('tabchanged', [curr, nsel, tabs]);
+    };
+
+    var displayFromHash = function(hash, forceUpdate) {
+        var sel = $(jq(hash)),
+                tabContents = sel.closest(contentSelector);
+        tabContents.children().hide();
+        sel.show().parentsUntil(contentSelector).show();
+        sel.find('ul.slides').css({'height':'auto'});
+
+        if (forceUpdate) {
+            var trig = $(tabSelector + ' li a[href$="'+jq(hash)+'"]');
+            if (trig.length) {
+                updateInterface(trig.first());
+                trig.get(0).scrollIntoView();
+            }
+        }
+    };
+    
+    var initialize = function() {
+        var hashFromTabClick = false;
+        
+        setupA11y($tabList);
+        
+        $tabList.on('click', 'a', function(ev) { //do something when a tab is clicked
+            var trig = $(this),
+                    hash = getHashFromLink(this);
+
+            if (!hash) {
+                return true;
+            }
+
+            updateInterface(trig);
+
+            if (!useHashChange) {
+                displayFromHash(hash);
+            } else {
+                hashFromTabClick = true;
+                if (getCleanHash() != hash) {
+                    window.location.hash = hash;
+                }
+            }
+
+            //(a11y) Prevent focus from leaving the tab so that arrow nav still works
+            ev.target.focus();
+            ev.preventDefault();
+
+            return false;
+        });
+
+        // If we have some tabs setup the hash stuff
+        if ($tabList.length) {
+            var
+                    isValidTabHash = function(hash) {
+                        return validRE.test(hash);
+                    },
+                    isTabExists = function(hash) {
+                        return isValidTabHash(hash) && $(contentSelector + ' ' + jq(hash)).length;
+                    },
+                    setupFirstHash = function(hash) {
+                        var ignoreTabs = $();
+                        if (hash) {
+                            ignoreTabs = $(jq(hash)).closest(contentSelector).prev(tabSelector);
+                        }
+
+                        var tabs = $tabList.not(ignoreTabs);
+
+                        if (!firstTrig) {
+                            firstTrig = [];
+                            tabs.each(function() {
+                                var selPrefix = 'li.selected';
+
+                                if (!$(selPrefix, this).length) {
+                                    selPrefix = '> li';
+                                }
+                                firstTrig.push($(selPrefix + ':first a:first', this)[0]);
+                            });
+                            firstTrig = $(firstTrig);
+                        }
+
+                        firstTrig.each(function() {
+                            var innerTrig = $(this);
+                            var hash = getHashFromLink(this);
+                            if (!hash || !isValidTabHash(hash)) {
+                                return;
+                            }
+                            updateInterface(innerTrig);
+                            displayFromHash(hash);
+                        });
+                    };
+
+            if (useHashChange) {
+                var setupHashChange = function() {
+                    var firstRun = true;
+                    $(window).off(tabSelector).on('hashchange', function() {
+                        console.log('hashchange');
+                        var hash = getCleanHash();
+                        if (hash && !isValidTabHash(hash)) {
+                            return true;
+                        }
+                        
+                        if (isTabExists(hash)) {
+                            console.log(hash);
+                            displayFromHash(hash, firstRun || !hashFromTabClick);
+
+                            if (firstRun) {
+                                setupFirstHash(hash);
+                                firstRun = false;
+                            }
+                            if (hashFromTabClick) {
+                                hashFromTabClick = false;
+                            }
+                            return false; //consume this hash event
+                        } else if (firstRun || hash === '') {
+                            setupFirstHash();
+                            firstRun = false;
+                            return true; //we simulated a hash event (allow others to consume);
+                        }
+                    });
+                    $(window).trigger('hashchange');
+                };
+
+                setupHashChange();
+            } else {
+                // No hashchange listener, so simulate first run
+                var hash = getCleanHash();
+                if (isTabExists(hash)) {
+                    displayFromHash(hash, true);
+                } else {
+                    hash = '';
+                }
+                setupFirstHash(hash);
+            }
+        }
+    };
+    
+    initialize();
+    
+    $('#fix').on('change', function() {
+        var $this = $(this);
+        var $selected = $('body');
+        if ($this.is(':checked')) {
+            $selected.addClass('fix-problem');
+        } else {
+            $selected.removeClass('fix-problem');
+        }
+    });
+});
+</script>
+</head>
+
+<body tabindex="-1">
+    <main>
+        <h1>a11y tabs (css) issue</h1>
+        <p>
+            This has been driving me crazy. I've been trying to implement aria for tabs that use url fragments (hashes) to keep track of the currently selected tabs (which also allows for linking directly to a specific tab). However, when testing is Safari with Voice Over (VO), I noticed that when a tab is selected, the focus will be directed to an adjacent tab rather than remaining on the currently selected tab, thus potentially causing confusion. <strong>This ONLY happens in Safari when VO is turned ON</strong>. Testing was done with default VO settings. After much time I have determined the exact issue, but I still don't understand it. It is my belief that it is a VO bug. Details are outlined below. Now that I know what the issue is, I can make a work-around. However, I still don't understand why it is an issue in the first place.
+        </p>
+        <ul>
+            <li>If you remove hash change functionality, everything works as expected. However, I tested with a different tabs implementation that had similar functionality (including hash change logic), and it worked as expected. The only difference was how JS and CSS were implemented.</li>
+            <li>After much debugging, it appears that removing the css rule <code>#tabs li.selected a { padding-bottom: 12px }</code> fixes the issue. Please inspect element to see details.</li>
+            <li>I made a <a href="https://youtu.be/Kn-7VrC_wxQ">video demonstrating the issue</a>.</li>
+            <li>In the video, you can see that after activing a tab, the <code>main</code> element receives VO focus (black outline) and then an adjacent tab recieves both VO and normal focus (black outline).</li>
+            <li>When you check 'Fix CSS', the <code>padding-bottom</code> style will be changed to match the other tabs.</li>
+            <li>This is NOT an issue that I can replicate in other browsers. I have not tried other screen readers.</li>
+        </ul>
+        
+        <label>
+            Fix CSS
+            <input type="checkbox" id="fix">
+        </label>
+        <h2>My preferred contact information</h2>
+        <ul id="tabs">
+            <li><a id="homeTab" href="#home" class="tab selected">Home</a></li>
+            <li><a id="workTab" href="#work" class="tab" >Work</a></li>
+            <li><a id="otherTab" href="#other" class="tab" >Other</a></li>
+            <li><a id="fouthTab" href="#fourth" class="tab">Fourth</a></li>
+        </ul>
+    
+        <div class="tabcontents">
+            <div id="home" class="tabcontent">
+                <h3>Home contact information</h3>
+                <p>Lots of input fields that do not matter for the purposes of demonstrating tabs.</p>
+            </div>
+        
+            <div id="work" class="tabcontent hidden">
+                <h3>Work contact information</h3>
+                <p>Lots of input fields that do not matter for the purposes of demonstrating tabs.</p>
+            </div>
+        
+            <div id="other" class="tabcontent hidden">
+                <h3>Other Contact Information</h3>
+                <p>Lots of input fields that do not matter for the purposes of demonstrating tabs.</p>
+            </div>
+            
+            <div id="fourth" class="tabcontent hidden">
+                <h3>Fourth</h3>
+                <p>Lots of input fields that do not matter for the purposes of demonstrating tabs.</p>
+            </div>
+        </div>
+        
+        <input type="submit" value="Fake submit contact info" onclick='alert("Thank you for submitting your contact info");'>
+    </main>
+</body>
+
+</html>
